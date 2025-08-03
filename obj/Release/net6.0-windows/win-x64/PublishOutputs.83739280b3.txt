@@ -1,0 +1,8 @@
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\UmaDumper.exe
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\Resources\icon.ico
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\Resources\version.dll
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\UmaDumper.dll
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\UmaDumper.deps.json
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\UmaDumper.runtimeconfig.json
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\UmaDumper.pdb
+C:\Users\Dyedw\Documents\repos\UmaDumper\UmaDumper\bin\Release\net6.0-windows\win-x64\publish\System.Management.dll
