@@ -4,6 +4,10 @@ i12cpp Resource Dumper for the Global Version of Umamusume Pretty Derby
 
 > ⚠️ **Disclaimer:** Use for Educational Purposes Only!!
 ---
+
+<img src="./Resources/demo.png" alt="demo" width="500">
+
+---
 ## Usage
 - Extract
 - Run App
