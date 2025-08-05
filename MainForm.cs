@@ -12,17 +12,16 @@ namespace UmamusumeDumper
     {
         private Process? gameProcess;
         private bool isDumping = false;
-        private TlgStarterManager? tlgStarterManager;
 
         // UI Controls
-        private TextBox txtGameDirectory;
-        private TextBox txtDumpLocation;
-        private Button btnBrowseGame;
-        private Button btnBrowseDump;
-        private Button btnStartDump;
-        private RichTextBox txtLog;
-        private ProgressBar progressBar;
-        private Label lblStatus;
+        private TextBox txtGameDirectory = null!;
+        private TextBox txtDumpLocation = null!;
+        private Button btnBrowseGame = null!;
+        private Button btnBrowseDump = null!;
+        private Button btnStartDump = null!;
+        private RichTextBox txtLog = null!;
+        private ProgressBar progressBar = null!;
+        private Label lblStatus = null!;
 
         public MainForm()
         {
@@ -32,8 +31,8 @@ namespace UmamusumeDumper
 
         private void InitializeComponent()
         {
-            this.Text = "UmaDumper V1.0";
-            this.Size = new Size(600, 550);
+            this.Text = "UmaDumper V1.1";
+            this.Size = new Size(600, 520);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
@@ -118,14 +117,14 @@ namespace UmamusumeDumper
                 Size = new Size(540, 200),
                 ReadOnly = true,
                 BackColor = Color.Black,
-                ForeColor = Color.White,
+                ForeColor = Color.Lime,
                 Font = new Font("Consolas", 9)
             };
 
             // Progress Bar
             progressBar = new ProgressBar
             {
-                Location = new Point(20, 410),
+                Location = new Point(20, 400),
                 Size = new Size(540, 20),
                 Visible = false
             };
@@ -133,16 +132,16 @@ namespace UmamusumeDumper
             // Status Label
             lblStatus = new Label
             {
-                Location = new Point(20, 440),
+                Location = new Point(20, 430),
                 Size = new Size(540, 20),
                 Text = "Ready to start dump process",
                 ForeColor = Color.Black
             };
 
-            // Credit Label at the bottom
+            // Credit Label
             var lblCredit = new Label
             {
-                Location = new Point(20, 470),
+                Location = new Point(20, 460),
                 Size = new Size(540, 20),
                 Text = "Made with ❤️ by watsonjph",
                 ForeColor = Color.Gray,
@@ -198,8 +197,6 @@ namespace UmamusumeDumper
             isDumping = true;
             btnStartDump.Enabled = false;
             progressBar.Visible = true;
-            progressBar.Value = 0;
-            progressBar.Maximum = 100;
             txtLog.Clear();
 
             try
@@ -226,15 +223,14 @@ namespace UmamusumeDumper
                 }
                 LogMessage("✅ Paths validated.");
 
-                // Step 2: Run tlg_starter.exe
-                UpdateProgress(30, "Step 2: Running tlg_starter.exe...");
-                tlgStarterManager = new TlgStarterManager(LogMessage, txtGameDirectory.Text);
-                if (!await tlgStarterManager.RunTlgStarter())
+                // Step 2: Copy version.dll to game directory
+                UpdateProgress(30, "Step 2: Copying version.dll to game directory...");
+                if (!await CopyVersionDll())
                 {
-                    LogMessage("❌ tlg_starter.exe failed! Cannot proceed.");
+                    LogMessage("❌ Failed to copy version.dll! Cannot proceed.");
                     return;
                 }
-                LogMessage("✅ tlg_starter.exe completed successfully.");
+                LogMessage("✅ version.dll copied successfully.");
 
                 // Step 3: Launch game
                 UpdateProgress(50, "Step 3: Launching UmamusumePrettyDerby.exe...");
@@ -255,34 +251,23 @@ namespace UmamusumeDumper
 
                 // Step 5: Cleanup
                 UpdateProgress(90, "Step 5: Cleaning up...");
-                tlgStarterManager.Cleanup();
+                await CleanupGameDirectory();
 
-                // Check if dump files were actually created
-                var dumpDir = Path.Combine(txtGameDirectory.Text, "dump_output");
-                if (Directory.Exists(dumpDir))
+                // Final status update based on whether files were found in dump location
+                var finalDumpFiles = Directory.GetFiles(txtDumpLocation.Text, "*", SearchOption.AllDirectories);
+                if (finalDumpFiles.Length > 0)
                 {
-                    var files = Directory.GetFiles(dumpDir, "*", SearchOption.AllDirectories);
-                    if (files.Length > 0)
-                    {
-                        UpdateProgress(100, $"✅ Dump process completed successfully! Found {files.Length} dump files.");
-                        lblStatus.Text = "Dump completed successfully!";
-                        lblStatus.ForeColor = Color.Green;
-                        MessageBox.Show($"Dump process completed successfully!\nFound {files.Length} dump files.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        UpdateProgress(100, "⚠️  Dump process completed but no dump files were found.");
-                        lblStatus.Text = "Dump completed but no files found!";
-                        lblStatus.ForeColor = Color.Orange;
-                        MessageBox.Show("Dump process completed but no dump files were found.\nThe game may not have launched properly or the version.dll may not have executed.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
+                    UpdateProgress(100, $"✅ Dump process completed successfully! Found {finalDumpFiles.Length} dump files.");
+                    lblStatus.Text = "Dump completed successfully!";
+                    lblStatus.ForeColor = Color.Green;
+                    MessageBox.Show($"Dump process completed successfully!\nFound {finalDumpFiles.Length} dump files in the specified location.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    UpdateProgress(100, "❌ Dump process completed but no dump directory was created.");
+                    UpdateProgress(100, "❌ Dump process completed but no dump files were found.");
                     lblStatus.Text = "Dump failed - no files created!";
                     lblStatus.ForeColor = Color.Red;
-                    MessageBox.Show("Dump process completed but no dump directory was created.\nThe game may not have launched properly or the version.dll may not have executed.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Dump process completed but no dump files were found.\nThe game may not have launched properly or the version.dll may not have executed.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
@@ -297,6 +282,76 @@ namespace UmamusumeDumper
                 isDumping = false;
                 btnStartDump.Enabled = true;
                 progressBar.Visible = false;
+            }
+        }
+
+        private async Task<bool> CopyVersionDll()
+        {
+            try
+            {
+                var resourcesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
+                var versionDllPath = Path.Combine(resourcesPath, "version.dll");
+                
+                if (!File.Exists(versionDllPath))
+                {
+                    LogMessage("❌ version.dll not found in Resources folder!");
+                    LogMessage("   Please ensure version.dll is placed in the Resources folder");
+                    return false;
+                }
+
+                var gameVersionDllPath = Path.Combine(txtGameDirectory.Text, "version.dll");
+                
+                // Try to remove existing file with multiple attempts
+                for (int attempt = 1; attempt <= 3; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(gameVersionDllPath))
+                        {
+                            File.Delete(gameVersionDllPath);
+                            LogMessage($"✅ Removed existing version.dll from game directory (attempt {attempt})");
+                        }
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (attempt == 3)
+                        {
+                            LogMessage($"⚠️  Warning: Failed to remove existing version.dll after 3 attempts: {ex.Message}");
+                            break;
+                        }
+                        await Task.Delay(1000);
+                    }
+                }
+
+                // Copy the file with multiple attempts
+                for (int attempt = 1; attempt <= 3; attempt++)
+                {
+                    try
+                    {
+                        File.Copy(versionDllPath, gameVersionDllPath, true);
+                        LogMessage($"✅ Copied version.dll to game directory (attempt {attempt})");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (attempt == 3)
+                        {
+                            LogMessage($"❌ Failed to copy version.dll after 3 attempts: {ex.Message}");
+                            LogMessage("   This may be due to insufficient permissions or file being in use");
+                            return false;
+                        }
+                        LogMessage($"⚠️  Attempt {attempt} failed to copy version.dll, retrying...");
+                        await Task.Delay(1000);
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"❌ Failed to copy version.dll: {ex.Message}");
+                return false;
             }
         }
 
@@ -423,36 +478,66 @@ namespace UmamusumeDumper
                 {
                     await Task.Delay(1000);
                     
-                    // Check if dump files have appeared in the game directory
-                    var dumpDir = Path.Combine(txtGameDirectory.Text, "dump_output");
-                    if (Directory.Exists(dumpDir))
+                    // Check multiple possible dump locations
+                    var waitPossibleDumpDirs = new[]
                     {
-                        var files = Directory.GetFiles(dumpDir, "*", SearchOption.AllDirectories);
-                        if (files.Length > 0)
+                        Path.Combine(txtGameDirectory.Text, "dump_output"),
+                        Path.Combine(txtGameDirectory.Text, "basic_dump"),
+                        Path.Combine(txtGameDirectory.Text, "dump"),
+                        txtGameDirectory.Text // Check root game directory for dump files
+                    };
+                    
+                    bool foundDumpFiles = false;
+                    string waitFoundDumpDir = "";
+                    
+                    foreach (var dumpDir in waitPossibleDumpDirs)
+                    {
+                        if (Directory.Exists(dumpDir))
                         {
-                            LogMessage($"✅ Found {files.Length} dump files in {dumpDir}!");
-                            
-                            // Check for specific dump files that indicate completion
-                            var expectedFiles = new[] { "classes_dump.txt", "methods_dump.txt", "dump_summary.txt", "il2cpp_detailed_dump.txt", "detailed_summary.txt" };
-                            var foundFiles = expectedFiles.Where(f => File.Exists(Path.Combine(dumpDir, f))).ToArray();
-                            
-                            if (foundFiles.Length >= 3) // At least 3 of the main dump files
+                            var files = Directory.GetFiles(dumpDir, "*", SearchOption.AllDirectories);
+                            if (files.Length > 0)
                             {
-                                LogMessage($"✅ Found {foundFiles.Length}/{expectedFiles.Length} expected dump files!");
+                                LogMessage($"✅ Found {files.Length} dump files in {dumpDir}!");
+                                foundDumpFiles = true;
+                                waitFoundDumpDir = dumpDir;
                                 
-                                // Check for completion flag
-                                var flagFile = Path.Combine(dumpDir, "dump_complete.flag");
-                                if (File.Exists(flagFile))
+                                // Check for various dump file patterns
+                                var possibleDumpFiles = new[]
                                 {
-                                    LogMessage("✅ Dump completion flag detected!");
-                                    break;
-                                }
-                                else
+                                    "classes_dump.txt", "methods_dump.txt", "dump_summary.txt", 
+                                    "il2cpp_detailed_dump.txt", "detailed_summary.txt",
+                                    "basic_dump.txt", "dump.txt", "summary.txt",
+                                    "classes.txt", "methods.txt", "il2cpp.txt"
+                                };
+                                
+                                var foundFiles = possibleDumpFiles.Where(f => File.Exists(Path.Combine(dumpDir, f))).ToArray();
+                                
+                                if (foundFiles.Length >= 1) // At least 1 dump file
                                 {
-                                    LogMessage("⚠️  Dump files found but completion flag not detected yet...");
+                                    LogMessage($"✅ Found {foundFiles.Length} dump files: {string.Join(", ", foundFiles)}");
+                                    
+                                    // Check for completion flag or GameAssembly_dumped.dll
+                                    var flagFile = Path.Combine(dumpDir, "dump_complete.flag");
+                                    var gameAssemblyDumped = Path.Combine(txtGameDirectory.Text, "GameAssembly_dumped.dll");
+                                    
+                                    if (File.Exists(flagFile) || File.Exists(gameAssemblyDumped))
+                                    {
+                                        LogMessage("✅ Dump completion detected!");
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        LogMessage("⚠️  Dump files found but completion not detected yet...");
+                                    }
                                 }
+                                break;
                             }
                         }
+                    }
+                    
+                    if (foundDumpFiles)
+                    {
+                        break;
                     }
                 }
 
@@ -478,18 +563,43 @@ namespace UmamusumeDumper
 
                 LogMessage("✅ Game process completed.");
                 
-                // Copy dump files to the specified dump location if different
-                var sourceDumpDir = Path.Combine(txtGameDirectory.Text, "dump_output");
-                if (Directory.Exists(sourceDumpDir))
+                // Find and copy dump files from various possible locations
+                var copyPossibleDumpDirs = new[]
+                {
+                    Path.Combine(txtGameDirectory.Text, "dump_output"),
+                    Path.Combine(txtGameDirectory.Text, "basic_dump"),
+                    Path.Combine(txtGameDirectory.Text, "dump"),
+                    txtGameDirectory.Text // Check root game directory for dump files
+                };
+                
+                string sourceDumpDir = "";
+                bool foundDumpDir = false;
+                
+                foreach (var dumpDir in copyPossibleDumpDirs)
+                {
+                    if (Directory.Exists(dumpDir))
+                    {
+                        var files = Directory.GetFiles(dumpDir, "*", SearchOption.AllDirectories);
+                        if (files.Length > 0)
+                        {
+                            sourceDumpDir = dumpDir;
+                            foundDumpDir = true;
+                            LogMessage($"📁 Found dump directory: {dumpDir} with {files.Length} files");
+                            break;
+                        }
+                    }
+                }
+                
+                if (foundDumpDir)
                 {
                     try
                     {
                         LogMessage("Copying dump files to specified location...");
                         
                         // Create target directory if it doesn't exist
-                        if (!Directory.Exists(txtDumpLocation.Text))
+                        if (!string.IsNullOrEmpty(txtDumpLocation.Text) && !Directory.Exists(txtDumpLocation.Text))
                         {
-                            Directory.CreateDirectory(txtDumpLocation.Text);
+                            Directory.CreateDirectory(txtDumpLocation.Text!);
                         }
                         
                         // Copy all files from dump directory
@@ -523,7 +633,13 @@ namespace UmamusumeDumper
                         LogMessage($"📁 Total files copied: {copiedFiles.Length}");
                         
                         // List the main dump files
-                        var mainDumpFiles = new[] { "classes_dump.txt", "methods_dump.txt", "dump_summary.txt", "il2cpp_detailed_dump.txt", "detailed_summary.txt", "GameAssembly_dumped.dll" };
+                        var mainDumpFiles = new[] { 
+                            "classes_dump.txt", "methods_dump.txt", "dump_summary.txt", 
+                            "il2cpp_detailed_dump.txt", "detailed_summary.txt", 
+                            "basic_dump.txt", "dump.txt", "summary.txt",
+                            "classes.txt", "methods.txt", "il2cpp.txt",
+                            "GameAssembly_dumped.dll" 
+                        };
                         foreach (var fileName in mainDumpFiles)
                         {
                             var filePath = Path.Combine(txtDumpLocation.Text, fileName);
@@ -534,12 +650,36 @@ namespace UmamusumeDumper
                             }
                         }
                         
-                        // Show completion message
-                        LogMessage("🎉 IL2CPP Dump completed successfully!");
-                        LogMessage("📂 You can find the dump files in the specified dump location.");
-                        
-                        // Clean up temporary files in game directory
-                        await CleanupGameDirectory();
+                        // Check if dump was successful by verifying files were copied to the dump location
+                        LogMessage("🔍 Verifying dump success...");
+                        var verificationFiles = Directory.GetFiles(txtDumpLocation.Text, "*", SearchOption.AllDirectories);
+                        if (verificationFiles.Length > 0)
+                        {
+                            LogMessage($"✅ Dump verification successful! Found {verificationFiles.Length} files in dump location.");
+                            
+                            // Show completion message
+                            LogMessage("🎉 IL2CPP Dump completed successfully!");
+                            LogMessage("📂 You can find the dump files in the specified dump location.");
+                            
+                            // Delete dump folder from game directory after successful verification
+                            LogMessage($"🧹 Cleaning up dump folder from game directory: {sourceDumpDir}");
+                            try
+                            {
+                                Directory.Delete(sourceDumpDir, true);
+                                LogMessage($"✅ Successfully deleted dump folder from game directory: {Path.GetFileName(sourceDumpDir)}");
+                            }
+                            catch (Exception ex)
+                            {
+                                LogMessage($"⚠️  Warning: Could not delete dump folder from game directory: {ex.Message}");
+                            }
+                            
+                            // Clean up other temporary files in game directory
+                            await CleanupGameDirectory();
+                        }
+                        else
+                        {
+                            LogMessage("❌ Dump verification failed - no files were copied to dump location!");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -548,7 +688,12 @@ namespace UmamusumeDumper
                 }
                 else
                 {
-                    LogMessage("⚠️  Warning: No dump files found in dump_output directory!");
+                    LogMessage("⚠️  Warning: No dump files found in any expected dump directories!");
+                    LogMessage("   Checked locations:");
+                    foreach (var dumpDir in copyPossibleDumpDirs)
+                    {
+                        LogMessage($"   - {dumpDir}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -578,23 +723,20 @@ namespace UmamusumeDumper
                     }
                 }
                 
-                // Remove tlg_starter.exe from game directory
-                var tlgStarterPath = Path.Combine(txtGameDirectory.Text, "tlg_starter.exe");
-                if (File.Exists(tlgStarterPath))
+                // Remove GameAssembly_dumped.dll from game directory
+                var gameAssemblyDumpedPath = Path.Combine(txtGameDirectory.Text, "GameAssembly_dumped.dll");
+                if (File.Exists(gameAssemblyDumpedPath))
                 {
                     try
                     {
-                        File.Delete(tlgStarterPath);
-                        LogMessage("✅ Removed tlg_starter.exe from game directory");
+                        File.Delete(gameAssemblyDumpedPath);
+                        LogMessage("✅ Removed GameAssembly_dumped.dll from game directory");
                     }
                     catch (Exception ex)
                     {
-                        // Don't log if we can't delete tlg_starter.exe
+                        LogMessage($"⚠️  Warning: Could not remove GameAssembly_dumped.dll: {ex.Message}");
                     }
                 }
-                
-                // Note: dump_output directory is left in game directory for user reference
-                // It will be cleaned up by the game or user manually if needed
                 
                 LogMessage("✅ Cleanup completed");
             }
@@ -667,8 +809,6 @@ namespace UmamusumeDumper
                     // Ignore cleanup errors
                 }
             }
-
-            tlgStarterManager?.Cleanup();
 
             base.OnFormClosing(e);
         }
